@@ -1,0 +1,7 @@
+dist/
+tests/posts.bin
+tests/shot-*.png
+tests/__pycache__/
+__pycache__/
+*.pyc
+.DS_Store

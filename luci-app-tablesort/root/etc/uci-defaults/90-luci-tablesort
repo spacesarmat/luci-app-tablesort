@@ -1,0 +1,5 @@
+#!/bin/sh
+# luci-app-tablesort: hook tablesort.js into legacy LuCI pages on install / first boot
+[ -x /usr/sbin/luci-tablesort-hook ] && /usr/sbin/luci-tablesort-hook apply >/dev/null 2>&1
+/etc/init.d/luci-tablesort enable >/dev/null 2>&1
+exit 0

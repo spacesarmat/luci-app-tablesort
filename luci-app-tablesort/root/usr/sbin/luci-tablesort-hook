@@ -1,0 +1,39 @@
+#!/bin/sh
+# luci-app-tablesort: add/remove the one-line <script> hook that loads tablesort.js on
+# legacy (Lua) LuCI CBI pages. The hook lives in luci-compat's cbi/footer.htm, so it is
+# idempotent and safe to re-run after luci-compat updates (package postinst, uci-defaults,
+# image build, rc.local).
+#   luci-tablesort-hook apply | remove | status
+F=${TABLESORT_FOOTER:-/usr/lib/lua/luci/view/cbi/footer.htm}
+JS=${TABLESORT_JS:-/www/luci-static/resources/tablesort.js}
+MARK='luci-app-tablesort'
+LINE='<script src="<%=resource%>/tablesort.js?v=1"></script><!-- luci-app-tablesort -->'
+
+clear_cache() { rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache 2>/dev/null; return 0; }
+
+case "$1" in
+apply)
+	[ -f "$F" ] || { echo "tablesort: $F not found (luci-compat not installed?) - nothing to do"; exit 0; }
+	[ -f "$JS" ] || { echo "tablesort: $JS not found"; exit 1; }
+	if grep -q "$MARK" "$F"; then echo "tablesort: hook already present"; exit 0; fi
+	grep -q '^<%+footer%>' "$F" || { echo "tablesort: anchor <%+footer%> not found in $F - not patched"; exit 1; }
+	tmp="$F.tablesort.$$"
+	awk -v line="$LINE" '!done && /^<%\+footer%>/ { print line; done=1 } { print }' "$F" > "$tmp" &&
+		cat "$tmp" > "$F" && rm -f "$tmp" || { rm -f "$tmp"; echo "tablesort: patch failed"; exit 1; }
+	grep -q "$MARK" "$F" || { echo "tablesort: patch not applied"; exit 1; }
+	clear_cache; echo "tablesort: hook added to $F"
+	;;
+remove)
+	[ -f "$F" ] || exit 0
+	if grep -q "$MARK" "$F"; then
+		tmp="$F.tablesort.$$"
+		grep -v "$MARK" "$F" > "$tmp" && cat "$tmp" > "$F"; rm -f "$tmp"
+		clear_cache; echo "tablesort: hook removed from $F"
+	else echo "tablesort: no hook in $F"; fi
+	;;
+status)
+	if [ -f "$F" ] && grep -q "$MARK" "$F"; then echo "hook: present"; else echo "hook: absent"; fi
+	[ -f "$JS" ] && echo "js: $JS" || echo "js: missing"
+	;;
+*) echo "usage: $0 apply|remove|status"; exit 2 ;;
+esac

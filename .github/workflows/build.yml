@@ -1,0 +1,89 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Hook and public-content checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hook script and content scan
+        run: |
+          sh tests/test-hook.sh
+          python3 tests/check_public.py
+
+  build:
+    name: OpenWrt ${{ matrix.release }} ${{ matrix.ext }}
+    runs-on: ubuntu-latest
+    needs: check
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - release: "25.12.6"
+            ext: apk
+          - release: "24.10.8"
+            ext: ipk
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDK host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ccache flex bison gawk gettext git libncurses-dev libssl-dev python3-setuptools rsync unzip zlib1g-dev file wget zstd swig
+      - name: Build with the official OpenWrt SDK
+        run: bash .github/build-sdk.sh "${{ matrix.release }}" "${{ matrix.ext }}"
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: luci-app-tablesort-${{ matrix.ext }}
+          path: dist/luci-app-tablesort*.${{ matrix.ext }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Check release assets
+        run: |
+          ls -l dist
+          compgen -G 'dist/*.apk' > /dev/null
+          compgen -G 'dist/*.ipk' > /dev/null
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: false
+          body: |
+            Click-to-sort column headers for legacy LuCI (CBI) tables in OpenWrt, e.g. the Passwall2 node list.
+
+            The package is architecture-independent (PKGARCH all). One file works on every target.
+
+            OpenWrt 25.12 (apk):
+
+                apk add --allow-untrusted luci-app-tablesort-*.apk
+
+            OpenWrt 24.10 (opkg). The SDK names this file with underscores:
+
+                opkg install luci-app-tablesort_*.ipk
+
+            Sorting changes the row order on the page only. Press Save & Apply on that page to store it.
+
+            Requires luci-compat. Legacy CBI pages get the footer hook. JavaScript LuCI views already sort natively, and this package leaves them unchanged.

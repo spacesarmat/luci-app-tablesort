@@ -1,0 +1,6 @@
+#!/bin/sh /etc/rc.common
+# luci-app-tablesort: re-apply the LuCI footer hook at boot (e.g. after luci-compat was updated)
+START=99
+boot() { /usr/sbin/luci-tablesort-hook apply >/dev/null 2>&1; return 0; }
+start() { /usr/sbin/luci-tablesort-hook apply; }
+stop() { return 0; }
