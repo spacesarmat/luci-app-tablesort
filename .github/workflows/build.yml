@@ -72,6 +72,8 @@ jobs:
           files: dist/*
           generate_release_notes: false
           body: |
+            ## English
+
             Click-to-sort column headers for legacy LuCI (CBI) tables in OpenWrt, e.g. the Passwall2 node list.
 
             The package is architecture-independent (PKGARCH all). One file works on every target.
@@ -87,3 +89,21 @@ jobs:
             Sorting changes the row order on the page only. Press Save & Apply on that page to store it.
 
             Requires luci-compat. Legacy CBI pages get the footer hook. JavaScript LuCI views already sort natively, and this package leaves them unchanged.
+
+            ## Русский
+
+            Заголовки столбцов с сортировкой по клику для устаревших таблиц LuCI (CBI) в OpenWrt, например списка узлов Passwall2.
+
+            Пакет не зависит от архитектуры (PKGARCH all). Один файл подходит для любой платформы.
+
+            OpenWrt 25.12 (apk):
+
+                apk add --allow-untrusted luci-app-tablesort-*.apk
+
+            OpenWrt 24.10 (opkg). SDK называет этот файл с подчеркиваниями:
+
+                opkg install luci-app-tablesort_*.ipk
+
+            Сортировка меняет порядок строк только на странице. Нажмите Save & Apply на этой странице, чтобы сохранить его.
+
+            Нужен luci-compat. На устаревшие страницы CBI ставится хук в футере. Страницы LuCI на JavaScript уже умеют сортировать сами, и этот пакет их не меняет.
