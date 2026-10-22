@@ -7,7 +7,8 @@
 F=${TABLESORT_FOOTER:-/usr/lib/lua/luci/view/cbi/footer.htm}
 JS=${TABLESORT_JS:-/www/luci-static/resources/tablesort.js}
 MARK='luci-app-tablesort'
-LINE='<script src="<%=resource%>/tablesort.js?v=1"></script><!-- luci-app-tablesort -->'
+VER='1.1.0'
+LINE='<script src="<%=resource%>/tablesort.js?v='"$VER"'"></script><!-- luci-app-tablesort -->'
 
 clear_cache() { rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache 2>/dev/null; return 0; }
 
@@ -15,7 +16,13 @@ case "$1" in
 apply)
 	[ -f "$F" ] || { echo "tablesort: $F not found (luci-compat not installed?) - nothing to do"; exit 0; }
 	[ -f "$JS" ] || { echo "tablesort: $JS not found"; exit 1; }
-	if grep -q "$MARK" "$F"; then echo "tablesort: hook already present"; exit 0; fi
+	if grep -qxF "$LINE" "$F"; then echo "tablesort: hook already present"; exit 0; fi
+	if grep -q "$MARK" "$F"; then
+		# an older hook line (other ?v=): drop it so the new one is inserted, browsers fetch the new js
+		tmp="$F.tablesort.$$"
+		grep -v "$MARK" "$F" > "$tmp" && cat "$tmp" > "$F"; rm -f "$tmp"
+		echo "tablesort: replacing older hook line"
+	fi
 	grep -q '^<%+footer%>' "$F" || { echo "tablesort: anchor <%+footer%> not found in $F - not patched"; exit 1; }
 	tmp="$F.tablesort.$$"
 	awk -v line="$LINE" '!done && /^<%\+footer%>/ { print line; done=1 } { print }' "$F" > "$tmp" &&

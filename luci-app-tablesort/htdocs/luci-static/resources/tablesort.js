@@ -8,13 +8,23 @@
  * Sorting only reorders the rows of the current table in the DOM and then calls the
  * page's own order function (Passwall2: set_order(group)), the same as drag-and-drop
  * and "To Top" do. Nothing is written to the router until "Save & Apply" is pressed.
+ *
+ * Filtering (1.1.0) only hides rows with a CSS class. Rows stay in the DOM, so their
+ * form fields and the saved order are submitted as before. Every filter value is
+ * collected at runtime from the rows of the table on the page; nothing is hardcoded.
+ * Other legacy CBI tables get filter-only support for columns with few distinct values.
  */
 (function () {
 	'use strict';
 	if (window.__luciTableSort) return;
-	window.__luciTableSort = { version: 1 };
+	window.__luciTableSort = { version: '1.1.0' };
 
 	var lang = (document.documentElement.lang || navigator.language || 'en').toLowerCase().indexOf('ru') === 0 ? 'ru' : 'en';
+	if (lang !== 'ru') {
+		/* some pages say lang="en" while the UI is translated: look at the page's own Save button */
+		var apply = document.querySelector('input[name="cbi.apply"], .cbi-page-actions .cbi-button-apply');
+		if (apply && /[\u0400-\u04FF]/.test(apply.value || apply.textContent || '')) lang = 'ru';
+	}
 	var T = {
 		ru: {
 			hint: 'Нажмите, чтобы отсортировать; повторное нажатие - обратный порядок. Чтобы сохранить порядок, нажмите "Сохранить и применить".',
@@ -24,7 +34,11 @@
 			changed: 'Порядок изменён только на этой странице. Чтобы сохранить его на роутере, нажмите "Сохранить и применить".',
 			restored: 'Восстановлен исходный порядок (он уже сохранён на роутере).',
 			wait: 'Идёт автопроверка пинга (осталось %d). Сортировка выполнится сразу после её окончания...',
-			waitFail: 'Автопроверка не закончилась за 2 минуты - сортировка отменена. Обновите страницу и попробуйте ещё раз.'
+			waitFail: 'Автопроверка не закончилась за 2 минуты - сортировка отменена. Обновите страницу и попробуйте ещё раз.',
+			filter: 'Фильтр:', all: 'Все', empty: '(пусто)', fType: 'Тип', fWord: 'Слово в описании',
+			search: 'поиск...', searchHint: 'Показать только строки, содержащие этот текст',
+			shown: 'Показано %s из %t', reset: 'Сбросить', resetHint: 'Показать все строки',
+			filterHint: 'Фильтр только скрывает строки на странице и ничего не меняет на роутере. Скрытые строки не выделяются кнопкой "Выбрать все".'
 		},
 		en: {
 			hint: 'Click to sort; click again to reverse. Press "Save & Apply" to keep the order.',
@@ -34,7 +48,11 @@
 			changed: 'The order changed on this page only. Press "Save & Apply" to store it on the router.',
 			restored: 'Original order restored (it is already saved on the router).',
 			wait: 'Automatic ping is still running (%d left). Sorting will run as soon as it finishes...',
-			waitFail: 'Automatic ping did not finish within 2 minutes - sorting cancelled. Reload the page and try again.'
+			waitFail: 'Automatic ping did not finish within 2 minutes - sorting cancelled. Reload the page and try again.',
+			filter: 'Filter:', all: 'All', empty: '(empty)', fType: 'Type', fWord: 'Word in remarks',
+			search: 'search...', searchHint: 'Show only rows that contain this text',
+			shown: 'Shown %s of %t', reset: 'Reset', resetHint: 'Show all rows',
+			filterHint: 'The filter only hides rows on this page and changes nothing on the router. Hidden rows are not selected by "Select all".'
 		}
 	}[lang];
 
@@ -62,6 +80,29 @@
 		for (var i = 0; i < tr.children.length; i++)
 			if (tr.children[i].tagName === 'TD' || tr.children[i].tagName === 'TH') out.push(tr.children[i]);
 		return out;
+	}
+
+
+	/* words of a free-text field, for the "word" filter; letters and digits only */
+	var wordSplit;
+	try { wordSplit = new RegExp('[^\\p{L}\\p{N}]+', 'u'); } catch (e) { wordSplit = /[\s.,;:!?|\/\\()\[\]{}<>"'`~@#$%^&*=+_-]+/; }
+	function words(text) {
+		var seen = {}, out = [];
+		String(text || '').split(wordSplit).forEach(function (w) {
+			if (w.length < 2 || /^\d+$/.test(w)) return;
+			var k = w.toLowerCase();
+			if (!seen[k]) { seen[k] = 1; out.push(w); }
+		});
+		return out;
+	}
+
+	/* visible value of a plain table cell; undefined for editable cells (text inputs, checkboxes) */
+	function cellValue(td) {
+		if (!td) return '';
+		var sel = td.querySelector('select');
+		if (sel) { var o = sel.options[sel.selectedIndex]; return o ? o.text.trim() : ''; }
+		if (td.querySelector('input:not([type=hidden]), textarea')) return undefined;
+		return td.textContent.replace(/\s+/g, ' ').trim().slice(0, 60);
 	}
 
 	/*
@@ -97,6 +138,30 @@
 			}
 		},
 		changed: function (table, info) { if (typeof window.set_order === 'function') window.set_order(info.group); },
+		/* filters: built from the rows on the page at runtime */
+		typeOf: function (tr, cols) {
+			var c = cellsOf(tr)[cols.name], t = c ? c.textContent.replace(/\s+/g, ' ').trim() : '';
+			var i = t.indexOf('\uFF1A');
+			if (i < 0) i = t.indexOf(':');
+			return (i < 0 ? '' : t.slice(0, i)).replace(/\s+Realm$/, '').trim();
+		},
+		filters: function (table, info, cols) {
+			var self = this;
+			return [
+				{ key: 'type', label: T.fType, get: function (tr) { return self.typeOf(tr, cols); } },
+				{ key: 'word', label: T.fWord, multi: true, minCount: 2, max: 40,
+					get: function (tr) { return words(hiddenVal(info.app, self.rowId(tr, info), 'remarks')); } }
+			];
+		},
+		search: function (tr, info, cols) {
+			var id = this.rowId(tr, info);
+			return [this.typeOf(tr, cols), hiddenVal(info.app, id, 'remarks'), hiddenVal(info.app, id, 'address') + ':' + hiddenVal(info.app, id, 'port')].join(' ');
+		},
+		searchMinRows: 2,
+		/* row checkboxes of the page's "Select all" / "Delete select nodes" / "Reassign Group" */
+		rowCheckbox: 'input.nodes_select',
+		selectAll: '.nodes_select_all, #select_all_btn',
+		selectionChanged: function () { if (typeof window.update_select_state === 'function') window.update_select_state(); },
 		/* auto ping (Automatic detection = Ping/TCPing) writes results by position in a live
 		   DOM collection, so rows must not move while it is still running.
 		   Returns { inflight: running requests, left: cells still waiting for a result } */
@@ -122,7 +187,41 @@
 		}
 	};
 
-	var adapters = [passwall2NodeList];
+	/* Any other legacy CBI table: no sorting, filters for columns with few distinct values */
+	var genericCbi = {
+		generic: true,
+		match: function () { return document.querySelector('table.cbi-section-table'); },
+		root: function () { return document.getElementById('maincontent') || document.body; },
+		info: function (table) { return table && table.classList && table.classList.contains('cbi-section-table') ? { app: '' } : null; },
+		columns: {},
+		extra: {},
+		rowId: function (tr) { return tr.id || ''; },
+		filters: function (table, info, cols, rows) {
+			if (rows.length < 4) return [];
+			var titles = table.querySelector('tr.cbi-section-table-titles'), ths = titles ? cellsOf(titles) : [], defs = [];
+			var n = cellsOf(rows[0]).length;
+			for (var i = 0; i < n && defs.length < 4; i++) {
+				var th = ths[i];
+				if (th && th.classList.contains('cbi-section-actions')) continue;
+				var seen = {}, distinct = 0, ok = true;
+				for (var r = 0; r < rows.length; r++) {
+					var v = cellValue(cellsOf(rows[r])[i]);
+					if (v === undefined) { ok = false; break; }
+					if (!seen.hasOwnProperty(v)) { seen[v] = 1; distinct++; if (distinct > 15) { ok = false; break; } }
+				}
+				if (!ok || distinct < 2 || distinct >= rows.length) continue;
+				var label = th ? th.textContent.replace(/\s+/g, ' ').trim() : '';
+				defs.push({ key: 'c' + i, label: label || ('#' + (i + 1)), get: (function (idx) {
+					return function (tr) { var v = cellValue(cellsOf(tr)[idx]); return v === undefined ? '' : v; };
+				})(i) });
+			}
+			return defs;
+		},
+		search: function (tr) { return tr.textContent; },
+		searchMinRows: 10
+	};
+
+	var adapters = [passwall2NodeList, genericCbi];
 	var A = null;
 	for (var ai = 0; ai < adapters.length; ai++) if (adapters[ai].match()) { A = adapters[ai]; break; }
 	if (!A) return;
@@ -138,7 +237,13 @@
 			'.ts-arrow{display:inline-block;min-width:1em;margin-left:.25em;font-size:90%}' +
 			'.ts-sub{font-weight:normal;font-size:85%;opacity:.85;margin-left:.6em;cursor:pointer;text-decoration:underline dotted;white-space:nowrap}' +
 			'.ts-sub.ts-active{opacity:1;font-weight:bold}' +
-			'.ts-note{margin:.3em 0;padding:.3em .6em;border-radius:3px;background:rgba(251,154,5,.15);font-size:90%}';
+			'.ts-note{margin:.3em 0;padding:.3em .6em;border-radius:3px;background:rgba(251,154,5,.15);font-size:90%}' +
+			'tr.ts-hidden{display:none!important}' +
+			'.ts-filter{display:flex;flex-wrap:wrap;align-items:center;gap:.3em .8em;margin:.4em 0;font-size:90%}' +
+			'.ts-filter label{display:inline-flex;align-items:center;gap:.3em;white-space:nowrap}' +
+			'.ts-filter select,.ts-filter input{width:auto!important;min-width:6em;max-width:22em;height:auto;padding:.15em .3em;margin:0}' +
+			'.ts-filter .ts-count{opacity:.8}' +
+			'.ts-filter.ts-on .ts-count{font-weight:bold;opacity:1}';
 		document.head.appendChild(st);
 	})();
 
@@ -222,6 +327,7 @@
 			rows = list.map(function (x) { return x.tr; });
 		}
 		applyOrder(table, info, rows);
+		refreshFilter(table);
 		setIndicator(table, th, sub, key, dir);
 		note(table, key === 'orig' ? T.restored : T.changed);
 	}
@@ -279,9 +385,199 @@
 		});
 	}
 
+
+	/* ---- filters ---- */
+	var uidSeq = 0;
+	function uid(table) { if (!table.__tsUid) table.__tsUid = table.id || ('ts-t' + (++uidSeq)); return table.__tsUid; }
+
+	function collect(table) {
+		var info = A.info(table), rows = dataRows(table), cols = colIndexMap(table);
+		var defs = (A.filters && rows.length >= 2) ? A.filters(table, info, cols, rows) : [], shown = [];
+		defs.forEach(function (d) {
+			var counts = {}, labels = {}, vals = rows.map(function (tr) {
+				var v = d.get(tr);
+				var list = d.multi ? (v || []) : [v == null ? '' : String(v)];
+				var keys = list.map(function (x) {
+					var k = d.multi ? String(x).toLowerCase() : String(x);
+					counts[k] = (counts[k] || 0) + 1;
+					(labels[k] = labels[k] || {})[x] = (labels[k][x] || 0) + 1;
+					return k;
+				});
+				return keys;
+			});
+			var opts = Object.keys(counts).filter(function (k) {
+				return !d.multi || (counts[k] >= (d.minCount || 1) && counts[k] < rows.length);
+			}).map(function (k) {
+				var best = '', bn = -1;
+				for (var l in labels[k]) if (labels[k][l] > bn) { bn = labels[k][l]; best = l; }
+				return { v: k, label: best === '' ? T.empty : best, n: counts[k] };
+			});
+			if (d.multi) opts.sort(function (a, b) { return b.n - a.n || cmpText(a.label, b.label); });
+			else opts.sort(function (a, b) { return cmpText(a.label, b.label); });
+			if (d.max) opts = opts.slice(0, d.max);
+			if (d.multi ? opts.length >= 1 : opts.length >= 2) { d.vals = vals; d.opts = opts; shown.push(d); }
+		});
+		var search = A.search && rows.length >= (A.searchMinRows || 2);
+		var sig = rows.length + (search ? 's' : '') + '|' + shown.map(function (d) {
+			return d.key + '=' + d.opts.map(function (o) { return o.v + ':' + o.n; }).join(',');
+		}).join('|');
+		return { info: info, rows: rows, cols: cols, defs: shown, search: search, sig: sig };
+	}
+
+	function buildBar(table, c) {
+		var st = table.__tsF || (table.__tsF = { sel: {}, q: '' });
+		var id = 'ts-filter-' + uid(table), bar = document.getElementById(id);
+		if (!bar) {
+			bar = document.createElement('div');
+			bar.id = id;
+			bar.className = 'ts-filter';
+			bar.title = T.filterHint;
+			table.parentNode.insertBefore(bar, table);
+			bar.__tsTable = table;
+		}
+		while (bar.firstChild) bar.removeChild(bar.firstChild);
+		var head = document.createElement('span');
+		head.textContent = T.filter;
+		bar.appendChild(head);
+		var keep = {};
+		c.defs.forEach(function (d) {
+			var lab = document.createElement('label'), sel = document.createElement('select');
+			lab.appendChild(document.createTextNode(d.label));
+			sel.className = 'cbi-input-select';
+			sel.setAttribute('data-ts-filter', d.key);
+			var all = document.createElement('option');
+			all.value = '';
+			all.textContent = T.all + ' (' + c.rows.length + ')';
+			sel.appendChild(all);
+			d.opts.forEach(function (o) {
+				var op = document.createElement('option');
+				op.value = 'v:' + o.v;
+				op.textContent = o.label + ' (' + o.n + ')';
+				sel.appendChild(op);
+			});
+			var cur = st.sel[d.key] || '';
+			if (cur && !d.opts.some(function (o) { return 'v:' + o.v === cur; })) cur = '';
+			sel.value = cur;
+			if (cur) keep[d.key] = cur;
+			lab.appendChild(sel);
+			bar.appendChild(lab);
+		});
+		st.sel = keep;
+		if (c.search) {
+			var inp = document.createElement('input');
+			inp.type = 'search';
+			inp.className = 'cbi-input-text';
+			inp.placeholder = T.search;
+			inp.title = T.searchHint;
+			inp.setAttribute('data-ts-search', '1');
+			inp.value = st.q;
+			bar.appendChild(inp);
+		} else st.q = '';
+		var cnt = document.createElement('span');
+		cnt.className = 'ts-count';
+		bar.appendChild(cnt);
+		var rst = document.createElement('button');
+		rst.type = 'button';
+		rst.className = 'btn cbi-button';
+		rst.setAttribute('data-ts-reset', '1');
+		rst.textContent = T.reset;
+		rst.title = T.resetHint;
+		bar.appendChild(rst);
+		return bar;
+	}
+
+	function applyFilter(table, c, bar) {
+		var st = table.__tsF || { sel: {}, q: '' }, q = (st.q || '').toLowerCase().trim(), on = !!q, shown = 0, unchecked = false;
+		c.defs.forEach(function (d) { if (st.sel[d.key]) on = true; });
+		c.rows.forEach(function (tr, i) {
+			var ok = true;
+			c.defs.forEach(function (d) {
+				var s = st.sel[d.key];
+				if (ok && s && d.vals[i].indexOf(s.slice(2)) < 0) ok = false;
+			});
+			if (ok && q && String(A.search(tr, c.info, c.cols)).toLowerCase().indexOf(q) < 0) ok = false;
+			if (ok !== !tr.classList.contains('ts-hidden')) tr.classList.toggle('ts-hidden', !ok);
+			if (ok) {
+				shown++;
+				var want = 'cbi-rowstyle-' + ((shown - 1) % 2 + 1), other = want === 'cbi-rowstyle-1' ? 'cbi-rowstyle-2' : 'cbi-rowstyle-1';
+				if (!tr.classList.contains(want)) tr.classList.add(want);
+				if (tr.classList.contains(other)) tr.classList.remove(other);
+			} else if (A.rowCheckbox) {
+				var cb = tr.querySelector(A.rowCheckbox);
+				if (cb && cb.checked) { cb.checked = false; unchecked = true; }
+			}
+		});
+		if (unchecked && A.selectionChanged) A.selectionChanged();
+		var cnt = bar.querySelector('.ts-count');
+		var txt = T.shown.replace('%s', shown).replace('%t', c.rows.length);
+		if (cnt && cnt.textContent !== txt) cnt.textContent = txt;
+		if (bar.classList.contains('ts-on') !== on) bar.classList.toggle('ts-on', on);
+	}
+
+	function removeBar(table) {
+		var bar = table.__tsUid ? document.getElementById('ts-filter-' + table.__tsUid) : null;
+		if (bar) bar.remove();
+		dataRows(table).forEach(function (tr) { if (tr.classList.contains('ts-hidden')) tr.classList.remove('ts-hidden'); });
+		table.__tsSig = null;
+	}
+
+	function refreshFilter(table) {
+		if (!A.filters || !A.info(table)) return;
+		var c = collect(table);
+		if (!c.defs.length && !c.search) { if (table.__tsSig) removeBar(table); return; }
+		var bar = document.getElementById('ts-filter-' + uid(table));
+		if (!bar || c.sig !== table.__tsSig) { bar = buildBar(table, c); table.__tsSig = c.sig; }
+		applyFilter(table, c, bar);
+	}
+
+	function barTable(el) { var bar = el && el.closest ? el.closest('.ts-filter') : null; return bar && bar.__tsTable ? bar.__tsTable : null; }
+
+	root.addEventListener('change', function (ev) {
+		var t = ev.target, table;
+		if (t && t.getAttribute && t.getAttribute('data-ts-filter') && (table = barTable(t))) {
+			(table.__tsF = table.__tsF || { sel: {}, q: '' }).sel[t.getAttribute('data-ts-filter')] = t.value;
+			refreshFilter(table);
+		} else if (A.generic && t && t.tagName === 'SELECT' && (table = t.closest('table.cbi-section-table'))) {
+			refreshFilter(table); /* a value in a filtered column was edited */
+		}
+	});
+	var searchTimer = null;
+	root.addEventListener('input', function (ev) {
+		var t = ev.target, table = t && t.getAttribute && t.getAttribute('data-ts-search') ? barTable(t) : null;
+		if (!table) return;
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(function () {
+			(table.__tsF = table.__tsF || { sel: {}, q: '' }).q = t.value;
+			refreshFilter(table);
+		}, 150);
+	});
+	root.addEventListener('keydown', function (ev) {
+		/* Enter in the search box must not submit the page form */
+		if (ev.key === 'Enter' && ev.target && ev.target.getAttribute && ev.target.getAttribute('data-ts-search')) ev.preventDefault();
+	});
+	root.addEventListener('click', function (ev) {
+		var t = ev.target, table = t && t.getAttribute && t.getAttribute('data-ts-reset') ? barTable(t) : null;
+		if (!table) return;
+		ev.preventDefault();
+		table.__tsF = { sel: {}, q: '' };
+		table.__tsSig = null;
+		refreshFilter(table);
+	});
+	if (A.selectAll) document.addEventListener('click', function (ev) {
+		/* "Select all" must not select rows hidden by the filter */
+		if (!ev.target || !ev.target.closest || !ev.target.closest(A.selectAll)) return;
+		setTimeout(function () {
+			var any = false;
+			root.querySelectorAll('tr.ts-hidden ' + A.rowCheckbox).forEach(function (cb) { if (cb.checked) { cb.checked = false; any = true; } });
+			if (any && A.selectionChanged) A.selectionChanged();
+		}, 0);
+	});
+
 	function enhanceAll() {
 		var tables = root.querySelectorAll('table.cbi-section-table');
-		for (var i = 0; i < tables.length; i++) enhance(tables[i]);
+		for (var i = 0; i < tables.length; i++) {
+			try { enhance(tables[i]); refreshFilter(tables[i]); } catch (e) { if (window.console) console.warn('luci-app-tablesort:', e); }
+		}
 	}
 
 	root.addEventListener('click', function (ev) {

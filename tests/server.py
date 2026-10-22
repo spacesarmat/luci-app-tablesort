@@ -56,7 +56,7 @@ def render_page():
                 '<input id="cbid.passwall2.%s.remarks" value="%s">'
                 '<input type="hidden" id="cbid.passwall2.%s.address" value="%s">'
                 '<input type="hidden" id="cbid.passwall2.%s.port" value="%s">'
-                '<span class="proto">%s: %s</span>'
+                '<span class="proto">%s\uff1a%s</span>'
                 '</td>'
                 '<td class="pw-ping"><span class="ping_value" cbiid="%s">---</span></td>'
                 '<td class="pw-tcping"><span class="tcping_value" cbiid="%s">---</span> '
@@ -125,6 +125,39 @@ ul.tabs a { cursor: pointer; }
 PAGE = render_page().encode('utf-8')
 
 
+GENERIC_ROWS = [
+    ('lan%d' % i, ['lan', 'wan', 'guest'][i % 3], ['static', 'dhcp'][i % 2], i % 4 != 0)
+    for i in range(1, 13)
+]
+
+
+def render_generic():
+    rows = []
+    for index, (name, zone, proto, enabled) in enumerate(GENERIC_ROWS):
+        options = ''.join(
+            '<option value="%s"%s>%s</option>' % (z, ' selected' if z == zone else '', z.upper())
+            for z in ('lan', 'wan', 'guest'))
+        rows.append(
+            '<tr class="tr cbi-section-table-row cbi-rowstyle-%d" id="cbi-sample-%s">'
+            '<td class="td">%s</td>'
+            '<td class="td"><select name="cbid.sample.%s.zone">%s</select></td>'
+            '<td class="td">%s</td>'
+            '<td class="td"><input type="checkbox" name="cbid.sample.%s.enabled"%s></td>'
+            '<td class="td cbi-section-actions"><input type="button" value="Edit"></td>'
+            '</tr>' % (index % 2 + 1, name, name, name, options, proto, name, ' checked' if enabled else ''))
+    return ('<!DOCTYPE html><html lang="en" ><head><meta charset="utf-8"><title>Generic CBI sample</title></head>'
+            '<body><div id="maincontent"><form name="cbi" method="post" action="/cgi-bin/luci/admin/network/generic_sample">'
+            '<table class="table cbi-section-table" id="cbi-sample-iface"><tbody>'
+            '<tr class="tr cbi-section-table-titles"><th class="th">Name</th><th class="th">Zone</th>'
+            '<th class="th">Protocol</th><th class="th">Enabled</th><th class="th cbi-section-actions"></th></tr>'
+            '%s</tbody></table>'
+            '<input type="submit" name="cbi.apply" value="Save &amp; Apply"></form></div>'
+            '<script src="/luci-static/resources/tablesort.js?v=1"></script></body></html>') % ''.join(rows)
+
+
+GENERIC_PAGE = render_generic().encode('utf-8')
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         return
@@ -147,6 +180,14 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith('/fixtures/page.js'):
             with open(PAGE_JS, 'rb') as fh:
                 return self.send_body(200, fh.read(), 'application/javascript')
+        if path.endswith('/network/generic_sample'):
+            if method == 'POST':
+                length = int(self.headers.get('Content-Length', '0'))
+                data = self.rfile.read(length)
+                with open(POSTS, 'ab') as fh:
+                    fh.write(data + b'\n=====\n')
+                return self.send_body(200, '<html><body>saved</body></html>')
+            return self.send_body(200, GENERIC_PAGE)
         if path.endswith('/passwall2/node_list'):
             if method == 'POST':
                 length = int(self.headers.get('Content-Length', '0'))

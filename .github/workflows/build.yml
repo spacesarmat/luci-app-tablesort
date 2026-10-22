@@ -74,7 +74,9 @@ jobs:
           body: |
             ## English
 
-            Click-to-sort column headers for legacy LuCI (CBI) tables in OpenWrt, e.g. the Passwall2 node list.
+            Click-to-sort column headers and filter dropdowns for legacy LuCI (CBI) tables in OpenWrt, e.g. the Passwall2 node list.
+
+            Version 1.1.0 adds a filter bar above each table. Values are collected from the rows on the page (type, a word in remarks, and a search box), with a count, "shown X of Y", and reset. A filter only hides rows. Save & Apply still posts every row and the full order. Other legacy CBI tables get filters only, no sorting. Upgrading replaces an older footer hook line so the browser loads this script.
 
             The package is architecture-independent (PKGARCH all). One file works on every target.
 
@@ -92,7 +94,9 @@ jobs:
 
             ## Русский
 
-            Заголовки столбцов с сортировкой по клику для устаревших таблиц LuCI (CBI) в OpenWrt, например списка узлов Passwall2.
+            Заголовки столбцов с сортировкой по клику и выпадающие фильтры для устаревших таблиц LuCI (CBI) в OpenWrt, например списка узлов Passwall2.
+
+            Версия 1.1.0 добавляет панель фильтров над каждой таблицей. Значения собираются из строк на странице (тип, слово в примечаниях и поле поиска), со счетчиком, надписью «показано X из Y» и сбросом. Фильтр только скрывает строки. Save & Apply по-прежнему отправляет все строки и полный порядок. У остальных устаревших таблиц CBI есть только фильтры, без сортировки. Обновление заменяет старую строку хука в футере, чтобы браузер загрузил этот скрипт.
 
             Пакет не зависит от архитектуры (PKGARCH all). Один файл подходит для любой платформы.
 

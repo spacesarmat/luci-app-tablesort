@@ -34,6 +34,12 @@ out=$("$HOOK" apply)
 echo "$out" | grep -q 'already present' || fail "second apply: $out"
 pass 'apply is idempotent'
 
+printf '%s\n' 'header' '<script src="<%=resource%>/tablesort.js?v=1"></script><!-- luci-app-tablesort -->' '<%+footer%>' 'tail' > "$TMP/old.htm"
+TABLESORT_FOOTER="$TMP/old.htm" "$HOOK" apply | grep -q 'hook added' || fail 'upgrade from an older hook line'
+[ "$(grep -c 'luci-app-tablesort' "$TMP/old.htm")" = 1 ] || fail 'old hook line not replaced'
+grep -q 'tablesort.js?v=1.1.0' "$TMP/old.htm" || fail 'new version not in hook line'
+pass 'apply replaces an older hook line'
+
 out=$("$HOOK" status)
 echo "$out" | grep -q 'hook: present' || fail "status present: $out"
 echo "$out" | grep -q "js: $JS" || fail "status js: $out"

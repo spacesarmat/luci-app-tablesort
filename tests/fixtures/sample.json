@@ -4,23 +4,23 @@
       "id": "group_a",
       "label": "Group A",
       "nodes": [
-        {"id": "na1", "remarks": "Relay 10", "type": "VMess", "address": "192.0.2.10", "port": "443", "ping": "250"},
-        {"id": "na2", "remarks": "Relay 2", "type": "VLess", "address": "192.0.2.2", "port": "8443", "ping": ""},
-        {"id": "na3", "remarks": "Relay 1", "type": "Trojan", "address": "192.0.2.1", "port": "443", "ping": "12"},
+        {"id": "na1", "remarks": "Relay 10 east", "type": "VMess", "address": "192.0.2.10", "port": "443", "ping": "250"},
+        {"id": "na2", "remarks": "Relay 2 west", "type": "VLess", "address": "192.0.2.2", "port": "8443", "ping": ""},
+        {"id": "na3", "remarks": "Relay 1 east", "type": "Trojan", "address": "192.0.2.1", "port": "443", "ping": "12"},
         {"id": "na4", "remarks": "Relay 3", "type": "Shadowsocks", "address": "203.0.113.5", "port": "8388", "ping": "1500"},
         {"id": "na5", "remarks": "Relay 20", "type": "Hysteria2", "address": "192.0.2.20", "port": "443", "ping": "80"},
         {"id": "na6", "remarks": "Relay 4", "type": "Socks", "address": "198.51.100.4", "port": "1080", "ping": ""},
-        {"id": "na7", "remarks": "Relay 11", "type": "VMess", "address": "192.0.2.11", "port": "2053", "ping": "8"},
-        {"id": "na8", "remarks": "Relay 5", "type": "VLess", "address": "192.0.2.5", "port": "443", "ping": "40"}
+        {"id": "na7", "remarks": "Relay 11 east", "type": "VMess", "address": "192.0.2.11", "port": "2053", "ping": "8"},
+        {"id": "na8", "remarks": "Relay 5 west", "type": "VLess", "address": "192.0.2.5", "port": "443", "ping": "40"}
       ]
     },
     {
       "id": "group_b",
       "label": "Group B",
       "nodes": [
-        {"id": "nb1", "remarks": "Backup 2", "type": "VMess", "address": "192.0.2.30", "port": "443", "ping": "30"},
+        {"id": "nb1", "remarks": "Backup 2 east", "type": "VMess", "address": "192.0.2.30", "port": "443", "ping": "30"},
         {"id": "nb2", "remarks": "Backup 10", "type": "VLess", "address": "192.0.2.31", "port": "443", "ping": "100"},
-        {"id": "nb3", "remarks": "Backup 1", "type": "Trojan", "address": "192.0.2.32", "port": "443", "ping": ""},
+        {"id": "nb3", "remarks": "Backup 1 east", "type": "Trojan", "address": "192.0.2.32", "port": "443", "ping": ""},
         {"id": "nb4", "remarks": "Backup 3", "type": "Socks", "address": "192.0.2.33", "port": "443", "ping": "15"}
       ]
     }

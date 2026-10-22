@@ -23,4 +23,6 @@ python3 -m playwright install chromium   # skip when /usr/bin/google-chrome exis
 python3 tests/test.py en ru
 ```
 
+`test_filter.py` (same server, `python3 tests/test_filter.py en ru`) checks the 1.1.0 filter bar: type options and counts built from the rows, filtering hides rows only with CSS, restriping, sort with a filter active, the order field keeps hidden rows, the word and search filters, "Select all" skipping hidden rows, reset, Enter not submitting, rebuilding after a row is removed, a Save that posts every row, and on `/cgi-bin/luci/admin/network/generic_sample` (a synthetic generic CBI table) filters only for low-cardinality columns, select-cell values and edits.
+
 `test.py` starts `server.py` on `127.0.0.1:8765` when that port is free. It checks header enhancement, waiting while automatic ping is still running, numeric Ping ascending and descending with Timeout last (including a seconds value), the title row staying first, `group.order.<group>` matching the DOM, stable row-to-ping mapping, natural name order, address order, restore, To Top, drag-and-drop, sorting a second group without touching the first, manual TCPing, the Reassign Group dialog, and a Save & Apply post of the sorted order. Pass `en`, `ru`, or both.

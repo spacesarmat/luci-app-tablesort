@@ -10,7 +10,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-tablesort
-PKG_VERSION:=1.0.0
+PKG_VERSION:=1.1.0
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 PKG_MAINTAINER:=ANDY BUM (spacesarmat)
@@ -21,7 +21,7 @@ define Package/luci-app-tablesort
   SECTION:=luci
   CATEGORY:=LuCI
   SUBMENU:=3. Applications
-  TITLE:=Click-to-sort table headers for LuCI (Passwall2 node list and more)
+  TITLE:=Click-to-sort headers and filters for LuCI tables (Passwall2 node list and more)
   DEPENDS:=+luci-compat
   PKGARCH:=all
   URL:=https://github.com/spacesarmat/luci-app-tablesort
@@ -29,7 +29,7 @@ define Package/luci-app-tablesort
 endef
 
 define Package/luci-app-tablesort/description
-  Click-to-sort column headers for legacy LuCI (CBI) tables in OpenWrt, for example the Passwall2 node list.
+  Click-to-sort column headers and filter dropdowns for legacy LuCI (CBI) tables in OpenWrt, for example the Passwall2 node list.
 endef
 
 define Build/Compile
